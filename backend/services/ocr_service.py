@@ -40,6 +40,7 @@ CURRENCY_HINTS = {
     "\u20ac": "EUR",
     "\u00a3": "GBP",
 }
+CURRENCY_CODES = ("USD", "INR", "EUR", "GBP")
 CURRENCY_CODE_PATTERN = re.compile(r"\b(USD|INR|EUR|GBP)\b", flags=re.IGNORECASE)
 NUMBER_PATTERN = re.compile(r"(?<!\d)(\d{1,7}(?:[\.,]\d{1,3})?)(?!\d)")
 DECIMAL_OVERLAP_PATTERN = re.compile(r"(?=(\d{2,7}[\.,]\d{1,2}))")
@@ -90,6 +91,14 @@ def _extract_currency_from_text(text: str) -> str | None:
     match = CURRENCY_CODE_PATTERN.search(text)
     if match:
         return match.group(1).upper()
+
+    # Fuzzy fallback for OCR-distorted 3-letter codes (e.g., EUP -> EUR).
+    tokens = re.findall(r"[A-Za-z]{3}", text.upper())
+    for token in tokens:
+        for code in CURRENCY_CODES:
+            diff = sum(1 for a, b in zip(token, code) if a != b)
+            if diff <= 1:
+                return code
     return None
 
 
@@ -162,6 +171,17 @@ def _extract_vendor(lines: list[str]) -> str | None:
 
 def _normalize_date(raw: str) -> str | None:
     text = raw.strip()
+
+    # Handle compact OCR variants like 2903/2026 (DDMM/YYYY).
+    compact = re.fullmatch(r"(\d{2})(\d{2})[/-](\d{4})", text)
+    if compact:
+        dd, mm, yyyy = compact.groups()
+        try:
+            parsed = datetime.strptime(f"{dd}/{mm}/{yyyy}", "%d/%m/%Y")
+            return parsed.date().isoformat()
+        except ValueError:
+            pass
+
     formats = (
         "%d/%m/%Y",
         "%d-%m-%Y",
@@ -186,12 +206,26 @@ def _extract_text(text: str) -> dict:
 
     amount, currency = _extract_amount_and_currency(lines, text)
 
-    date_match = re.search(DATE_PATTERN, text)
+    date_candidates: list[str] = []
+    for line in lines + [text]:
+        normalized_line = line.translate(str.maketrans({"O": "0", "o": "0", "I": "1", "l": "1"}))
+        for match in re.finditer(DATE_PATTERN, normalized_line):
+            parsed = _normalize_date(match.group(1))
+            if parsed:
+                date_candidates.append(parsed)
+
+    date_value = None
+    if date_candidates:
+        counts: dict[str, int] = {}
+        for d in date_candidates:
+            counts[d] = counts.get(d, 0) + 1
+        date_value = sorted(counts.keys(), key=lambda d: counts[d], reverse=True)[0]
+
     vendor = _extract_vendor(lines)
 
     return {
         "amount": amount,
-        "date": _normalize_date(date_match.group(1)) if date_match else None,
+        "date": date_value,
         "description": vendor,
         "vendor": vendor,
         "currency": currency,
@@ -201,8 +235,13 @@ def _extract_text(text: str) -> dict:
 
 
 def extract_receipt_data(image_bytes: bytes) -> dict:
-    text = pytesseract.image_to_string(preprocess(image_bytes), config="--psm 6")
-    return _extract_text(text)
+    image = preprocess(image_bytes)
+    chunks: list[str] = []
+    for psm in (6, 11):
+        chunk = pytesseract.image_to_string(image, config=f"--psm {psm}")
+        if chunk.strip():
+            chunks.append(chunk)
+    return _extract_text("\n".join(chunks))
 
 
 def extract_receipt_data_from_pdf(pdf_bytes: bytes) -> dict:
