@@ -1,5 +1,7 @@
 import io
 import re
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from PIL import Image, ImageEnhance, ImageFilter
 import pypdfium2 as pdfium
@@ -28,7 +30,42 @@ def preprocess(image_bytes: bytes) -> Image.Image:
     img = Image.open(io.BytesIO(image_bytes)).convert("L")
     img = img.filter(ImageFilter.SHARPEN)
     enhancer = ImageEnhance.Contrast(img)
-    return enhancer.enhance(2.0)
+    img = enhancer.enhance(2.0)
+    width, height = img.size
+    if width and height and min(width, height) < 1000:
+        scale = max(1000 / float(min(width, height)), 1.0)
+        img = img.resize((max(1, int(width * scale)), max(1, int(height * scale))))
+    return img
+
+
+def _to_float(raw: str) -> float | None:
+    cleaned = re.sub(r"[^\d\.,]", "", raw).replace(",", "")
+    if not cleaned:
+        return None
+    try:
+        return float(Decimal(cleaned))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _normalize_date(raw: str) -> str | None:
+    text = raw.strip()
+    formats = (
+        "%d/%m/%Y",
+        "%d-%m-%Y",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%b %d %Y",
+        "%b %d, %Y",
+        "%B %d %Y",
+        "%B %d, %Y",
+    )
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
 
 
 def _extract_text(text: str) -> dict:
@@ -39,8 +76,7 @@ def _extract_text(text: str) -> dict:
     for pattern in AMOUNT_PATTERNS:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
-            raw_amount = match.group(1)
-            amount = re.sub(r"[^\d\.]", "", raw_amount)
+            amount = _to_float(match.group(1))
             break
 
     date_match = re.search(DATE_PATTERN, text)
@@ -55,8 +91,8 @@ def _extract_text(text: str) -> dict:
         currency = "GBP"
 
     return {
-        "amount": float(amount) if amount else None,
-        "date": date_match.group(1) if date_match else None,
+        "amount": amount,
+        "date": _normalize_date(date_match.group(1)) if date_match else None,
         "description": lines[0] if lines else None,
         "vendor": lines[0] if lines else None,
         "currency": currency,
