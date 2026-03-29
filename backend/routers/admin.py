@@ -52,7 +52,7 @@ def update_user(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid role")
         user.role = RoleEnum(payload.role)
 
-    if payload.manager_id is not None:
+    if "manager_id" in payload.model_fields_set:
         user.manager_id = payload.manager_id
 
     db.commit()

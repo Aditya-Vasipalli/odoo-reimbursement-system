@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -12,6 +13,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 def _currency_from_country(country_code: str) -> str:
     code = country_code.upper().strip()
+    try:
+        response = httpx.get(f"https://restcountries.com/v3.1/alpha/{code}?fields=currencies", timeout=10.0)
+        response.raise_for_status()
+        payload = response.json()
+        item = payload[0] if isinstance(payload, list) and payload else payload
+        currencies = (item or {}).get("currencies") or {}
+        if currencies:
+            return next(iter(currencies.keys()))
+    except Exception:
+        pass
+
     fallback = {
         "IN": "INR",
         "US": "USD",
