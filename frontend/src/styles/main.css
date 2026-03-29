@@ -1,0 +1,22 @@
+:root {
+  --color-primary: #7c3aed;
+  --color-bg: #f8fafc;
+  --color-card: #ffffff;
+  --color-text: #1e293b;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(120deg, #eef2ff, #f8fafc);
+  color: var(--color-text);
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#app {
+  margin: 2rem auto;
+  max-width: 720px;
+  background: var(--color-card);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
