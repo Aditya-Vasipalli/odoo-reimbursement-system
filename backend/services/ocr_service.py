@@ -1,11 +1,30 @@
 import io
 import re
+import shutil
+from pathlib import Path
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from PIL import Image, ImageEnhance, ImageFilter
 import pypdfium2 as pdfium
 import pytesseract
+
+
+def _configure_tesseract_cmd() -> None:
+    if shutil.which("tesseract"):
+        return
+
+    candidates = [
+        Path("C:/Program Files/Tesseract-OCR/tesseract.exe"),
+        Path("C:/Program Files (x86)/Tesseract-OCR/tesseract.exe"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            pytesseract.pytesseract.tesseract_cmd = str(candidate)
+            return
+
+
+_configure_tesseract_cmd()
 
 
 AMOUNT_PATTERNS = [
