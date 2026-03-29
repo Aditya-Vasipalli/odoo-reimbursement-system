@@ -52,6 +52,8 @@ python -m uvicorn backend.main:app --reload --port 8000
 Notes:
 - Start from repository root so `backend.*` imports resolve.
 - Tables are auto-created on startup.
+- OCR supports image and PDF uploads via `/ocr/scan`.
+- For best OCR extraction quality, install Tesseract OCR on your machine and ensure `tesseract` is in PATH.
 
 Backend URLs:
 - Health: `http://127.0.0.1:8000/`
@@ -66,3 +68,17 @@ python -m http.server 3000
 
 Frontend URL:
 - `http://localhost:3000`
+
+## Frontend/Auth Notes
+
+- Login page supports sign-in only. Admin self-signup from UI is disabled.
+- Use backend bootstrap/signup flow to create a company + first admin account.
+- Offline demo mode is available from login screen:
+	- Email: `demo@odoo.local`
+	- Password: `demo123`
+
+## Expense Submission Notes
+
+- Expense form requires receipt evidence in UI.
+- In live mode, include a hosted receipt URL (for approver visibility).
+- OCR scan can prefill amount/date/description/currency fields from uploaded image/PDF, but approvers still need receipt URL visibility until backend file persistence is fully enforced.
